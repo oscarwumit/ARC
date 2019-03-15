@@ -454,6 +454,23 @@ H      -1.69944700    0.93441600   -0.11271200"""
         min_xyz = get_min_energy_conformer(xyzs, energies)
         self.assertEqual(min_xyz, 'xyz2')
 
+    def test_mol_from_xyz_atom_id(self):
+        """Test that atom ids are saved properly when loading both xyz and smiles."""
+        mol = self.spc6.mol
+        mol_list = self.spc6.mol_list
+
+        self.assertEqual(len(mol_list), 1)
+        res = mol_list[0]
+
+        self.assertTrue(mol.atomIDValid())
+        self.assertTrue(res.atomIDValid())
+
+        print(mol.toAdjacencyList())
+        print(res.toAdjacencyList())
+
+        self.assertTrue(mol.isIsomorphic(res))
+        self.assertTrue(mol.isIdentical(res))
+
 
 class TestTSGuess(unittest.TestCase):
     """
