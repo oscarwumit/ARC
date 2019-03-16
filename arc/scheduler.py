@@ -9,15 +9,10 @@ import datetime
 import numpy as np
 import math
 import shutil
+import yaml
 from IPython.display import display
 
 import cclib
-
-import yaml
-try:
-    from yaml import CDumper as Dumper, CSafeDumper as SafeDumper, CLoader as Loader, CSafeLoader as SafeLoader
-except ImportError:
-    from yaml import Dumper, Loader, SafeLoader, SafeDumper
 
 from arkane.statmech import Log
 from rmgpy.reaction import Reaction
@@ -66,7 +61,7 @@ class Scheduler(object):
     `fine`                  ``bool``  Whether or not to use a fine grid for opt jobs (spawns an additional job)
     `output`                ``dict``  Output dictionary with status and final QM file paths for all species
     `settings`              ``dict``  A dictionary of available servers and software
-    `initial_trsh`          ``dict``  Troubleshooting methods to try by default. Keys are server names, values are trshs
+    `initial_trsh`          ``dict``  Troubleshooting methods to try by default. Keys are ESS software, values are trshs
     `restart_dict`          ``dict``  A restart dictionary parsed from a YAML restart file
     `project_directory`     ``str``   Folder path for the project: the input file path or ARC/Projects/project-name
     `save_restart`          ``bool``  Whether to start saving a restart file. ``True`` only after all species are loaded
@@ -75,6 +70,9 @@ class Scheduler(object):
     `max_job_time`          ``int``   The maximal allowed job time on the server in hours
     `testing`               ``bool``  Used for internal ARC testing (generating the object w/o executing it)
     `rmgdb`                 ``RMGDatabase``  The RMG database object
+    `allow_nonisomorphic_2d` ``bool`` Whether to optimize species even if they do not have a 3D conformer that is
+                                        isomorphic to the 2D graph representation
+    `memory`                 ``int``  The allocated job memory (1500 MB by default)
     ======================= ========= ==================================================================================
 
     Dictionary structures:
@@ -107,7 +105,7 @@ class Scheduler(object):
     def __init__(self, project, settings, species_list, composite_method, conformer_level, opt_level, freq_level,
                  sp_level, scan_level, ts_guess_level, project_directory, rmgdatabase, fine=False, scan_rotors=True,
                  generate_conformers=True, initial_trsh=None, rxn_list=None, restart_dict=None, max_job_time=120,
-                 testing=False):
+                 allow_nonisomorphic_2d=False, memory=1500, testing=False):
         self.rmgdb = rmgdatabase
         self.restart_dict = restart_dict
         self.species_list = species_list
@@ -119,7 +117,9 @@ class Scheduler(object):
         self.job_dict = dict()
         self.servers_jobs_ids = list()
         self.running_jobs = dict()
+        self.allow_nonisomorphic_2d = allow_nonisomorphic_2d
         self.testing = testing
+        self.memory = memory
         if self.restart_dict is not None:
             self.output = self.restart_dict['output']
             if 'running_jobs' in self.restart_dict:
@@ -302,8 +302,6 @@ class Scheduler(object):
                         if self.scan_rotors:
                             # restart-related check are performed in run_scan_jobs()
                             self.run_scan_jobs(species.label)
-                    if self.species_dict[species.label].t0 is None:
-                        self.species_dict[species.label].t0 = time.time()
                 elif not self.species_dict[species.label].is_ts and self.generate_conformers\
                         and 'geo' not in self.output[species.label]:
                     self.species_dict[species.label].generate_conformers()
@@ -457,22 +455,21 @@ class Scheduler(object):
             if spc.yml_path is not None:
                 self.species_dict[spc.label] = spc
 
-    def run_job(self, label, xyz, level_of_theory, job_type, fine=False, software=None, shift='', trsh='', memory=1500,
+    def run_job(self, label, xyz, level_of_theory, job_type, fine=False, software=None, shift='', trsh='', memory=None,
                 conformer=-1, ess_trsh_methods=None, scan='', pivots=None, occ=None, scan_trsh='', scan_res=None):
         """
         A helper function for running (all) jobs
         """
         ess_trsh_methods = ess_trsh_methods if ess_trsh_methods is not None else list()
         pivots = pivots if pivots is not None else list()
-        if self.species_dict[label].t0 is None:
-            self.species_dict[label].t0 = time.time()
         species = self.species_dict[label]
+        memory = memory if memory is not None else self.memory
         job = Job(project=self.project, settings=self.settings, species_name=label, xyz=xyz, job_type=job_type,
                   level_of_theory=level_of_theory, multiplicity=species.multiplicity, charge=species.charge, fine=fine,
-                  shift=shift, software=software, is_ts=species.is_ts, memory=memory, trsh=trsh, conformer=conformer,
+                  shift=shift, software=software, is_ts=species.is_ts, memory=memory, trsh=trsh,
                   ess_trsh_methods=ess_trsh_methods, scan=scan, pivots=pivots, occ=occ, initial_trsh=self.initial_trsh,
                   project_directory=self.project_directory, max_job_time=self.max_job_time, scan_trsh=scan_trsh,
-                  scan_res=scan_res)
+                  scan_res=scan_res, conformer=conformer)
         if conformer < 0:
             # this is NOT a conformer job
             self.running_jobs[label].append(job.job_name)  # mark as a running job
@@ -505,17 +502,21 @@ class Scheduler(object):
             self.run_job(label=label, xyz=job.xyz, level_of_theory=job.level_of_theory, job_type=job.job_type,
                          fine=job.fine, software=job.software, shift=job.shift, trsh=job.trsh, memory=job.memory,
                          conformer=job.conformer, ess_trsh_methods=job.ess_trsh_methods, scan=job.scan,
-                         pivots=job.pivots, occ=job.occ)
+                         pivots=job.pivots, occ=job.occ, scan_trsh=job.scan_trsh, scan_res=job.scan_res)
             self.running_jobs[label].pop(self.running_jobs[label].index(job_name))
         if job.job_status[0] != 'running' and job.job_status[1] != 'running':
             self.running_jobs[label].pop(self.running_jobs[label].index(job_name))
             self.timer = False
-            job.run_time = str(datetime.datetime.now() - job.date_time).split('.')[0]
             job.write_completed_job_to_csv_file()
-            logging.info('  Ending job {name} for {label} ({time})'.format(name=job.job_name, label=label,
-                                                                           time=job.run_time))
+            logging.info('  Ending job {name} for {label} (run time: {time})'.format(name=job.job_name, label=label,
+                                                                                     time=job.run_time))
             if job.job_status[0] != 'done':
                 return False
+            if job.job_status[0] == 'done' and job.job_status[1] == 'done':
+                if self.species_dict[label].run_time is None:
+                    self.species_dict[label].run_time = job.run_time
+                else:
+                    self.species_dict[label].run_time += job.run_time
             self.save_restart_dict()
             return True
 
@@ -528,23 +529,32 @@ class Scheduler(object):
         for label in self.unique_species_labels:
             if not self.species_dict[label].is_ts and 'opt converged' not in self.output[label]['status']\
                         and 'opt' not in self.job_dict[label]:
-                if len(self.species_dict[label].conformers) > 1:
-                    self.job_dict[label]['conformers'] = dict()
-                    for i, xyz in enumerate(self.species_dict[label].conformers):
-                        self.run_job(label=label, xyz=xyz, level_of_theory=self.conformer_level, job_type='conformer',
-                                     conformer=i)
-                else:
-                    if 'opt' not in self.job_dict[label] and 'composite' not in self.job_dict[label]\
-                            and self.species_dict[label].number_of_atoms > 1\
-                            and len(self.species_dict[label].conformers):
-                        # proceed only if opt (/composite) not already spawned
-                        logging.info('Only one conformer is available for species {0},'
-                                     ' using it for geometry optimization'.format(label))
-                        self.species_dict[label].initial_xyz = self.species_dict[label].conformers[0]
-                        if not self.composite_method:
-                            self.run_opt_job(label)
-                        else:
-                            self.run_composite_job(label)
+                geo_dir = os.path.join(self.project_directory, 'output', 'Species', label, 'geometry')
+                if not os.path.exists(geo_dir):
+                    os.makedirs(geo_dir)
+                conf_path = os.path.join(geo_dir, 'conformers_before_optimization.txt')
+                with open(conf_path, 'w') as f:
+                    for conf in self.species_dict[label].conformers:
+                        f.write(conf)
+                        f.write('\n\n')
+                if not self.testing:
+                    if len(self.species_dict[label].conformers) > 1:
+                        self.job_dict[label]['conformers'] = dict()
+                        for i, xyz in enumerate(self.species_dict[label].conformers):
+                            self.run_job(label=label, xyz=xyz, level_of_theory=self.conformer_level,
+                                         job_type='conformer', conformer=i)
+                    else:
+                        if 'opt' not in self.job_dict[label] and 'composite' not in self.job_dict[label]\
+                                and self.species_dict[label].number_of_atoms > 1\
+                                and len(self.species_dict[label].conformers):
+                            # proceed only if opt (/composite) not already spawned
+                            logging.info('Only one conformer is available for species {0},'
+                                         ' using it for geometry optimization'.format(label))
+                            self.species_dict[label].initial_xyz = self.species_dict[label].conformers[0]
+                            if not self.composite_method:
+                                self.run_opt_job(label)
+                            else:
+                                self.run_composite_job(label)
 
     def run_ts_conformer_jobs(self, label):
         """
@@ -680,7 +690,7 @@ class Scheduler(object):
             log = Log(path='')
             log.determine_qm_software(fullpath=job.local_path_to_output_file)
             e0 = log.software_log.loadEnergy()
-            self.species_dict[label].conformer_energies[i] = e0
+            self.species_dict[label].conformer_energies[i] = e0  # in J/mol
         else:
             logging.warn('Conformer {i} for {label} did not converge!'.format(i=i, label=label))
 
@@ -712,6 +722,24 @@ class Scheduler(object):
                 else:
                     xyzs.append(get_xyz_string(xyz=coord, number=number))
             energies, xyzs = (list(t) for t in zip(*sorted(zip(self.species_dict[label].conformer_energies, xyzs))))
+            smiles_list = list()
+            for xyz in xyzs:
+                _, b_mol = molecules_from_xyz(xyz)
+                smiles = b_mol.toSMILES() if b_mol is not None else 'no 2D structure'
+                smiles_list.append(smiles)
+            geo_dir = os.path.join(self.project_directory, 'output', 'Species', label, 'geometry')
+            if not os.path.exists(geo_dir):
+                os.makedirs(geo_dir)
+            conf_path = os.path.join(geo_dir, 'conformers_after_optimization.txt')
+            with open(conf_path, 'w') as f:
+                for i, xyz in enumerate(xyzs):
+                    f.write('conformer {0}:\n'.format(i))
+                    if xyz is not None:
+                        f.write(xyz + '\n')
+                        f.write('SMILES: ' + smiles_list[i] + '\n')
+                        f.write('Relative Energy: {0} kJ/mol\n\n\n'.format((energies[i] - min(energies)) * 0.001))
+                    else:
+                        f.write('Failed to converge')
             # Run isomorphism checks if a 2D representation is available
             if self.species_dict[label].mol is not None:
                 for i, xyz in enumerate(xyzs):
@@ -724,15 +752,15 @@ class Scheduler(object):
                                 conformer_xyz = xyz
                                 self.output[label]['status'] += 'passed isomorphism check; '
                             else:
-                                # 2625.50 is the conversion factor from Hartree to kJ/mol
                                 logging.info('A conformer for species {0} was found to be isomorphic '
                                              'with the 2D graph representation {1}. This conformer is {2} kJ/mol '
                                              'above the most stable one (which is not isomorphic). Using the '
                                              'isomorphic conformer for further geometry optimization.'.format(
                                               label, self.species_dict[label].mol.toSMILES(),
-                                              (energies[i] - energies[0]) * 2625.50))
+                                              (energies[i] - energies[0]) * 0.001))
                                 conformer_xyz = xyz
-                                self.output[label]['status'] += 'passed isomorphism check but not for the most stable conformer; '
+                                self.output[label]['status'] += 'passed isomorphism check but not for the most stable' \
+                                                                ' conformer; '
                             break
                         else:
                             if i == 0:
@@ -740,11 +768,18 @@ class Scheduler(object):
                                              'with the 2D graph representation {1}. Searching for a different '
                                              'conformer that is isomorphic'.format(label, b_mol.toSMILES()))
                 else:
-                    logging.error('No conformer for {0} was found to be isomorphic with the 2D graph representation'
-                                  ' {1}. NOT optimizing this species.'.format(
-                                   label, self.species_dict[label].mol.toSMILES()))
-                    self.output[label]['status'] += 'Error: No conformer was found to be isomorphic with the 2D graph' \
-                                                    ' representation! '
+                    if self.allow_nonisomorphic_2d:
+                        # we'll optimize the most stable conformer even if it not isomorphic to the 2D graph
+                        logging.error('No conformer for {0} was found to be isomorphic with the 2D graph representation'
+                                      ' {1}. Optimizing the most stable conformer anyway.'.format(
+                                       label, self.species_dict[label].mol.toSMILES()))
+                        conformer_xyz = xyzs[0]
+                    else:
+                        logging.error('No conformer for {0} was found to be isomorphic with the 2D graph representation'
+                                      ' {1}. NOT optimizing this species.'.format(
+                                       label, self.species_dict[label].mol.toSMILES()))
+                        self.output[label]['status'] += 'Error: No conformer was found to be isomorphic with the 2D' \
+                                                        ' graph representation! '
             else:
                 logging.warn('Could not run isomorphism check for species {0} due to missing 2D graph '
                              'representation. Using the most stable conformer for further geometry'
@@ -908,10 +943,8 @@ class Scheduler(object):
                 data = ccparser.parse()
                 vibfreqs = data.vibfreqs
             except AssertionError:
-                """
-                In cclib/parser/qchemparser.py there's an assertion of `assert 'Beta MOs' in line`
-                which sometimes fails (CClib issue https://github.com/cclib/cclib/issues/678)
-                """
+                # In cclib/parser/qchemparser.py there's an assertion of `assert 'Beta MOs' in line`
+                # which sometimes fails (CClib issue https://github.com/cclib/cclib/issues/678)
                 vibfreqs = parser.parse_frequencies(path=str(job.local_path_to_output_file), software=job.software)
             freq_ok = self.check_negative_freq(label=label, job=job, vibfreqs=vibfreqs)
             if not self.species_dict[label].is_ts and not freq_ok:
@@ -1124,6 +1157,27 @@ class Scheduler(object):
                 break  # A job object has only one pivot. Break if found, otherwise raise an error.
         else:
             raise SchedulerError('Could not match rotor with pivots {0} in species {1}'.format(job.pivots, label))
+        self.save_restart_dict()
+
+    def check_all_done(self, label):
+        """
+        Check that we have all required data for the species/TS in ``label``
+        """
+        status = self.output[label]['status']
+        if 'error' not in status and ('composite converged' in status or ('sp converged' in status and
+                     (self.species_dict[label].is_ts or self.species_dict[label].number_of_atoms == 1 or
+                     ('freq converged' in status and 'opt converged' in status)))):
+            logging.info('\nAll jobs for species {0} successfully converged.'
+                         ' Run time: {1}'.format(label, self.species_dict[label].run_time))
+            self.output[label]['status'] += 'ALL converged'
+            plotter.save_geo(species=self.species_dict[label], project_directory=self.project_directory)
+            if self.species_dict[label].is_ts:
+                self.species_dict[label].make_ts_report()
+                logging.info(self.species_dict[label].ts_report + '\n')
+        elif not self.output[label]['status']:
+            self.output[label]['status'] = 'nothing converged'
+            logging.error('species {0} did not converge. Status is: {1}'.format(label, status))
+        # Update restart dictionary and save the yaml restart file:
         self.save_restart_dict()
 
     def get_servers_jobs_ids(self):
@@ -1531,29 +1585,6 @@ class Scheduler(object):
                                                 ' Tried troubleshooting with the following methods: {methods}'.format(
                                                  label=label, methods=job.ess_trsh_methods)
 
-    def check_all_done(self, label):
-        """
-        Check that we have all required data for the species/TS in ``label``
-        """
-        status = self.output[label]['status']
-        if 'error' not in status and ('composite converged' in status or ('sp converged' in status and
-                     (self.species_dict[label].is_ts or self.species_dict[label].number_of_atoms == 1 or
-                     ('freq converged' in status and 'opt converged' in status)))):
-            d, h, m, s = time_lapse(t0=self.species_dict[label].t0)
-            self.species_dict[label].execution_time = '{0}{1:02.0f}:{2:02.0f}:{3:02.0f}'.format(d, h, m, s)
-            logging.info('\nAll jobs for species {0} successfully converged.'
-                         ' Elapsed time: {1}'.format(label, self.species_dict[label].execution_time))
-            self.output[label]['status'] += 'ALL converged'
-            plotter.save_geo(species=self.species_dict[label], project_directory=self.project_directory)
-            if self.species_dict[label].is_ts:
-                self.species_dict[label].make_ts_report()
-                logging.info(self.species_dict[label].ts_report + '\n')
-        elif not self.output[label]['status']:
-            self.output[label]['status'] = 'nothing converged'
-            logging.error('species {0} did not converge. Status is: {1}'.format(label, status))
-        # Update restart dictionary and save the yaml restart file:
-        self.save_restart_dict()
-
     def delete_all_species_jobs(self, label):
         """
         Delete all jobs of species/TS represented by `label`
@@ -1582,6 +1613,7 @@ class Scheduler(object):
                         break
                 else:
                     raise SchedulerError('Could not find species {0} in the restart file'.format(spc_label))
+                conformer = job_description['conformer'] if 'conformer' in job_description else -1
                 job = Job(project=self.project, settings=self.settings, species_name=spc_label,
                           xyz=job_description['xyz'], job_type=job_description['job_type'],
                           level_of_theory=job_description['level_of_theory'], multiplicity=species.multiplicity,
@@ -1592,7 +1624,10 @@ class Scheduler(object):
                           project_directory=job_description['project_directory'], job_num=job_description['job_num'],
                           job_server_name=job_description['job_server_name'], job_name=job_description['job_name'],
                           job_id=job_description['job_id'], server=job_description['server'],
-                          run_time=job_description['run_time'], date_time=job_description['date_time'])
+                          initial_time=job_description['initial_time'], conformer=conformer,
+                          software=job_description['software'], comments=job_description['comments'],
+                          scan_trsh=job_description['scan_trsh'], initial_trsh=job_description['initial_trsh'],
+                          max_job_time=job_description['max_job_time'], scan_res=job_description['scan_res'])
                 if spc_label not in self.job_dict:
                     self.job_dict[spc_label] = dict()
                 if job_description['job_type'] not in self.job_dict[spc_label]:
@@ -1614,6 +1649,8 @@ class Scheduler(object):
         Update the restart_dict and save the restart.yml file
         """
         if self.save_restart:
+            yaml.add_representer(str, string_representer)
+            yaml.add_representer(unicode, unicode_representer)
             logging.debug('Creating a restart file...')
             self.restart_dict['output'] = self.output
             self.restart_dict['species'] = [spc.as_dict() for spc in self.species_dict.values()]
@@ -1623,7 +1660,7 @@ class Scheduler(object):
                     self.restart_dict['running_jobs'][spc.label] =\
                         [self.job_dict[spc.label][job_name.split('_')[0]][job_name].as_dict()
                          for job_name in self.running_jobs[spc.label] if 'conformer' not in job_name]
-            content = yaml.safe_dump(data=self.restart_dict, encoding='utf-8', allow_unicode=True)
+            content = yaml.dump(data=self.restart_dict, encoding='utf-8', allow_unicode=True)
             with open(self.restart_path, 'w') as f:
                 f.write(content)
             logging.debug('Dumping restart dictionary:\n{0}'.format(self.restart_dict))
@@ -1655,3 +1692,17 @@ def time_lapse(t0):
     else:
         d = ''
     return d, h, m, s
+
+
+# Add a custom string representer to use block literals for multiline strings
+def string_representer(dumper, data):
+    if len(data.splitlines()) > 1:
+        return dumper.represent_scalar(tag='tag:yaml.org,2002:str', value=data, style='|')
+    return dumper.represent_scalar(tag='tag:yaml.org,2002:str', value=data)
+
+
+# Add a custom unicode representer to use block literals for multiline strings
+def unicode_representer(dumper, data):
+    if len(data.splitlines()) > 1:
+        return yaml.ScalarNode(tag='tag:yaml.org,2002:str', value=data, style='|')
+    return yaml.ScalarNode(tag='tag:yaml.org,2002:str', value=data)
