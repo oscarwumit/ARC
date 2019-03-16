@@ -28,41 +28,20 @@ import string
 #         'key': '/home/<username>/.ssh/id_rsa',
 #     }
 # }
-# servers = {
-#     'server1': {
-#         'cluster_soft': 'OGE',  # Oracle Grid Engine
-#         'address': 'server1.host.edu',
-#         'un': '<username>',
-#         'key': 'path_to_rsa_key',
-#         'precedence': 'molpro',
-#     },
-#     'server2': {
-#         'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
-#         'address': 'server2.host.edu',
-#         'un': '<username>',
-#         'key': 'path_to_rsa_key',
-#     }
-# }
-
 servers = {
-   'pharos': {
-       'cluster_soft': 'OGE',  # Oracle Grid Engine (Sun Grin Engine)
-       'address': 'pharos.mit.edu',
-       'un': 'oscarwu',
-       'key': '/home/oscarwu/.ssh/id_rsa',
-   },
-   'c3ddb': {
-       'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
-       'address': 'c3ddb01.mit.edu',
-       'un': 'oscarwu',
-       'key': '/home/oscarwu/.ssh/id_rsa',
-   },
-   'rmg': {
-         'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
-         'address': 'rmg.mit.edu',
-         'un': 'oscarwu',
-         'key': '/home/oscarwu/.ssh/id_rsa',
-   }
+    'server1': {
+        'cluster_soft': 'OGE',  # Oracle Grid Engine
+        'address': 'server1.host.edu',
+        'un': '<username>',
+        'key': 'path_to_rsa_key',
+        'precedence': 'molpro',
+    },
+    'server2': {
+        'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
+        'address': 'server2.host.edu',
+        'un': '<username>',
+        'key': 'path_to_rsa_key',
+    }
 }
 
 check_status_command = {'OGE': 'export SGE_ROOT=/opt/sge; /opt/sge/bin/lx24-amd64/qstat',

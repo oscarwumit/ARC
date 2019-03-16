@@ -34,7 +34,7 @@ qchem:
 input_files = {
     'gaussian': """%chk=check.chk
 %mem={memory}mb
-%nproc=48
+%nproc=8
 
 #P {job_type_1} {restricted}{method}{slash}{basis} {job_type_2} {fine} {trsh}
 
