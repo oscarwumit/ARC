@@ -38,7 +38,7 @@ input_files = {
 %mem={memory}mb
 %nproc=48
 
-#P {job_type_1} {restricted}{method}{slash}{basis} {job_type_2} {fine} {trsh} iop(2/9=2000)
+#P {job_type_1} {restricted}{method}{slash}{basis} {job_type_2} {fine} {trsh} iop(2/9=2000) Int=UltraFine
 
 name
 
