@@ -420,7 +420,7 @@ wf,spin={spin},charge={charge};}}
         if self.job_type in ['conformer', 'opt']:
             if self.software == 'gaussian':
                 if self.is_ts:
-                    job_type_1 = 'opt=(ts, calcfc, noeigentest)'
+                    job_type_1 = 'opt=(ts, calcfc, noeigentest, maxstep=5)'
                 else:
                     job_type_1 = 'opt=(calcfc, noeigentest)'
                 if self.fine:
