@@ -13,8 +13,8 @@ submit_scripts = {
 #SBATCH -J {name}
 #SBATCH -N 1
 #SBATCH -n 8
-#SBATCH --time={t_max}
-#SBATCH --mem-per-cpu 4500
+#SBATCH --time=5-0:00:00
+#SBATCH --mem-per-cpu 30000
 module add c3ddb/gaussian/09.d01
 which g09
 echo "============================================================"
