@@ -1096,7 +1096,7 @@ def _get_possible_conformers_rdkit(mol):
     if len(mol.atoms) > 50:
         Chem.AllChem.EmbedMultipleConfs(rd_mol, numConfs=500, randomSeed=1)
     elif len(mol.atoms) > 5:
-        Chem.AllChem.EmbedMultipleConfs(rd_mol, numConfs=len(mol.atoms) * 3, randomSeed=1)
+        Chem.AllChem.EmbedMultipleConfs(rd_mol, numConfs=500, randomSeed=1)
     else:
         Chem.AllChem.EmbedMultipleConfs(rd_mol, numConfs=50, randomSeed=1)
     energies = []
@@ -1141,7 +1141,7 @@ def _get_possible_conformers_openbabel(mol):
     if len(mol.atoms) > 50:
         ff.WeightedRotorSearch(500, 2000)
     elif len(mol.atoms) > 5:
-        ff.WeightedRotorSearch(len(mol.atoms) * 10 - 3, 2000)
+        ff.WeightedRotorSearch(500, 2000)
     else:
         ff.WeightedRotorSearch(50, 2000)
     ff.GetConformers(obmol)
