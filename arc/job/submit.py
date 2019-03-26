@@ -128,7 +128,6 @@ rm -rf $sdir
 #$ -l h=!node73.cluster
 #$ -l h=!node74.cluster
 #$ -l h=!node77.cluster
-#$ -l h=!node81.cluster
 #$ -l h=!node84.cluster
 #$ -l h=!node85.cluster
 #$ -l h=!node86.cluster
@@ -175,7 +174,6 @@ rm -r /scratch/{un}/{name}
 #$ -l h=!node73.cluster
 #$ -l h=!node74.cluster
 #$ -l h=!node77.cluster
-#$ -l h=!node81.cluster
 #$ -l h=!node84.cluster
 #$ -l h=!node85.cluster
 #$ -l h=!node86.cluster
@@ -222,7 +220,6 @@ rm -r /scratch/{un}/{name}
 #$ -l h=!node73.cluster
 #$ -l h=!node74.cluster
 #$ -l h=!node77.cluster
-#$ -l h=!node81.cluster
 #$ -l h=!node84.cluster
 #$ -l h=!node85.cluster
 #$ -l h=!node86.cluster
@@ -270,7 +267,6 @@ rm -r /scratch/{un}/{name}
 #$ -l h=!node73.cluster
 #$ -l h=!node74.cluster
 #$ -l h=!node77.cluster
-#$ -l h=!node81.cluster
 #$ -l h=!node84.cluster
 #$ -l h=!node85.cluster
 #$ -l h=!node86.cluster
