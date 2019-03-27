@@ -113,9 +113,9 @@ rm -rf $sdir
         'gaussian': """#!/bin/bash -l
 #$ -N {name}
 #$ -l long
-#$ -l magnycours
 #$ -l h_rt={t_max}
-#$ -pe singlenode 48
+#$ -l harpertown
+#$ -pe singlenode 8
 #$ -l h=!node60.cluster
 #$ -cwd
 #$ -o out.txt
@@ -159,9 +159,9 @@ rm -r /scratch/{un}/{name}
         'gaussian03_pharos': """#!/bin/bash -l
 #$ -N {name}
 #$ -l long
-#$ -l magnycours
+#$ -l harpertown
 #$ -l h_rt={t_max}
-#$ -pe singlenode 48
+#$ -pe singlenode 8
 #$ -l h=!node60.cluster
 #$ -cwd
 #$ -o out.txt
@@ -205,9 +205,9 @@ rm -r /scratch/{un}/{name}
         'qchem': """#!/bin/bash -l
 #$ -N {name}
 #$ -l long
-#$ -l magnycours
 #$ -l h_rt={t_max}
-#$ -pe singlenode 48
+#$ -l harpertown
+#$ -pe singlenode 8
 #$ -l h=!node60.cluster
 #$ -cwd
 #$ -o out.txt
@@ -242,7 +242,7 @@ export QCLOCALSCR=/scratch/{un}/{name}/qlscratch
 
 mkdir -p /scratch/{un}/{name}/qlscratch
 
-qchem -nt 48 input.in output.out
+qchem -nt 8 input.in output.out
 
 rm -r /scratch/{un}/{name}
 """,
@@ -252,9 +252,9 @@ rm -r /scratch/{un}/{name}
         'molpro': """#! /bin/bash -l
 #$ -N {name}
 #$ -l long
-#$ -l magnycours
 #$ -l h_rt={t_max}
-#$ -pe singlenode 48
+#$ -l harpertown
+#$ -pe singlenode 8
 #$ -l h=!node60.cluster
 #$ -cwd
 #$ -o out.txt
@@ -285,7 +285,7 @@ sdir=/scratch/{un}
 
 mkdir -p /scratch/{un}/qlscratch
 
-molpro -d $sdir -n 48 input.in
+molpro -d $sdir -n 8 input.in
 """,
     }
 }
