@@ -5,6 +5,7 @@ from __future__ import (absolute_import, division, print_function, unicode_liter
 import os
 import csv
 import logging
+import time
 
 from arc.settings import arc_path, servers, submit_filename, delete_command, t_max_format,\
     input_filename, output_filename, rotor_scan_resolution, list_available_nodes_command
@@ -70,6 +71,8 @@ class Job(object):
     `occ`              ``int``           The number of occupied orbitals (core + val) from a molpro CCSD sp calc
     `project_directory` ``str``          The path to the project directory
     `max_job_time`     ``int``           The maximal allowed job time on the server in hours
+    `available_nodes`  ``dict``          Dictionary of list of available nodes on severs.
+                                         {server1: [list of working nodes], server2: [list of working nodes]}
     ================ =================== ===============================================================================
 
     self.job_status:
@@ -81,7 +84,7 @@ class Job(object):
                  charge=0, conformer=-1, fine=False, shift='', software=None, is_ts=False, scan='', pivots=None,
                  memory=1500, comments='', trsh='', scan_trsh='', ess_trsh_methods=None, initial_trsh=None, job_num=None,
                  job_server_name=None, job_name=None, job_id=None, server=None, initial_time=None, occ=None,
-                 max_job_time=120, scan_res=None):
+                 max_job_time=120, scan_res=None, available_nodes=None):
         self.project = project
         self.settings=settings
         self.initial_time = initial_time
@@ -102,6 +105,7 @@ class Job(object):
         self.scan_trsh = scan_trsh
         self.scan_res = scan_res if scan_res is not None else rotor_scan_resolution
         self.max_job_time = max_job_time
+        self.available_nodes = available_nodes
         job_types = ['conformer', 'opt', 'freq', 'optfreq', 'sp', 'composite', 'scan', 'gsm', 'irc', 'ts_guess',
                      'orbitals']
         # the 'conformer' job type is identical to 'opt', but we differentiate them to be identifiable in Scheduler
@@ -776,37 +780,59 @@ $end
                 return 'errored: Unknown reason'
 
     def troubleshoot_server(self):
+        path = self.project_directory
         if self.settings['ssh']:
             if servers[self.server]['cluster_soft'].lower() == 'oge':
                 # delete present server run
-                logging.error('Job {name} has server status {stat} on {server}. Troubleshooting by changing node.'.format(
-                    name=self.job_name, stat=self.job_status[0], server=self.server))
+                logging.error('Job {name} has server status {stat} on {server}. Troubleshooting by changing node.'
+                              .format(name=self.job_name, stat=self.job_status[0], server=self.server))
                 ssh = SSH_Client(self.server)
                 ssh.send_command_to_server(command=delete_command[servers[self.server]['cluster_soft']] +
                                            ' ' + str(self.job_id))
-                # find available nodes
-                stdout, _ = ssh.send_command_to_server(
-                    command=list_available_nodes_command[servers[self.server]['cluster_soft']])
-                for line in stdout:
-                    node = line.split()[0].split('.')[0].split('node')[1]
-                    if servers[self.server]['cluster_soft'] == 'OGE' and '0/0/8' in line and node not in self.server_nodes:
-                        self.server_nodes.append(node)
-                        break
+
+                if self.server.lower() in ['pharos'] and servers[self.server]['cpus'] <= 8:
+                    with open(os.path.join(path, 'node_test', self.server, 'working_nodes_8core.txt'), 'r') as f:
+                        work_harpertown_node_list = f.readlines()
+                        work_harpertown_node_list = [node.strip() for node in work_harpertown_node_list]
+                    if not work_harpertown_node_list:
+                        logging.error('Could not find an available node on the server')
+                        # TODO: continue troubleshooting; try submit to other servers with the same ESS
+                        #  if all else fails, put job to sleep for x min and try again searching for a node
+                        return
+                    else:
+                        content = ssh.read_remote_file(remote_path=self.remote_path,
+                                                       filename=submit_filename[servers[self.server]['cluster_soft']])
+                        for i, line in enumerate(content):
+                            if '#$ -l h=node' in line:
+                                content[i] = work_harpertown_node_list[0]
+                                break
+                        else:
+                            content.insert(7, work_harpertown_node_list[0])
+                        content = ''.join(content)  # convert list into a single string, not to upset paramico
+                elif self.server.lower() in ['pharos'] and servers[self.server]['cpus'] > 8:
+                    with open(os.path.join(path, 'node_test', self.server, 'working_nodes_48core.txt'), 'r') as f:
+                        work_magnycours_node_list = f.readlines()
+                        work_magnycours_node_list = [node.strip() for node in work_magnycours_node_list]
+                        if not work_magnycours_node_list:
+                            logging.error('Could not find an available node on the server')
+                            # TODO: continue troubleshooting; try submit to other servers with the same ESS
+                            #  if all else fails, put job to sleep for x min and try again searching for a node
+                            return
+                        else:
+                            content = ssh.read_remote_file(remote_path=self.remote_path,
+                                                           filename=submit_filename[
+                                                               servers[self.server]['cluster_soft']])
+                            for i, line in enumerate(content):
+                                if '#$ -l h=node' in line:
+                                    content[i] = work_magnycours_node_list[0]
+                                    break
+                            else:
+                                content.insert(7, work_magnycours_node_list[0])
+                            content = ''.join(content)  # convert list into a single string, not to upset paramico
                 else:
-                    logging.error('Could not find an available node on the server')
-                    # TODO: continue troubleshooting; if all else fails, put job to sleep for x min and try again searching for a node
-                    return
-                # modify submit file
-                content = ssh.read_remote_file(remote_path=self.remote_path,
-                                               filename=submit_filename[servers[self.server]['cluster_soft']])
-                for i, line in enumerate(content):
-                    if '#$ -l h=node' in line:
-                        content[i] = '#$ -l h=node{0}.cluster'.format(node)
-                        break
-                else:
-                    content.insert(7, '#$ -l h=node{0}.cluster'.format(node))
-                content = ''.join(content)  # convert list into a single string, not to upset paramico
-                # resubmit
+                    pass  # todo: diagnose other OGE server
+
+                # resubmit job
                 ssh.upload_file(remote_file_path=os.path.join(self.remote_path,
                                 submit_filename[servers[self.server]['cluster_soft']]), file_string=content)
                 self.run()

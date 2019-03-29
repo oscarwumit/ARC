@@ -81,3 +81,10 @@ class SanitizationError(Exception):
     Exception class to handle errors during SMILES perception.
     """
     pass
+
+
+class FunctionArgumentError(Exception):
+    """
+    Exception class to handle unexpected function argument
+    """
+    pass
