@@ -801,9 +801,6 @@ $end
                 ssh.send_command_to_server(command=delete_command[servers[self.server]['cluster_soft']] +
                                            ' ' + str(self.job_id))
 
-                # diagnosing nodes on server
-                logging.info('Diagnosing nodes on {server}.'.format(server=self.server))
-                self.server_node_test()
                 if self.server.lower() in ['pharos'] and servers[self.server]['cpus'] <= 8:
                     with open(os.path.join(path, 'node_test', self.server, 'working_nodes_8core.txt'), 'r') as f:
                         work_harpertown_node_list = f.readlines()
@@ -860,86 +857,6 @@ $end
                                            ' ' + str(self.job_id))
                 # resubmit
                 self.run()
-
-    def server_node_test(self):
-        """
-        Test the nodes on server.
-        """
-        # Test for OGE servers
-        if servers[self.server]['cluster_soft'].lower() == 'oge':
-
-            # Create node_test folder in the project directory
-            path = self.project_directory
-            if not os.path.exists(os.path.join(path, 'node_test')):
-                os.mkdir(os.path.join(path, 'node_test'))
-            if not os.path.exists(os.path.join(path, 'node_test', self.server)):
-                os.mkdir(os.path.join(path, 'node_test', self.server))
-
-            # Create node test script
-            with open(os.path.join(path, 'node_test', self.server, 'ctest.sh'), 'w') as f:
-                f.write("""#!/bin/bash
-
-#$ -pe singlenode 8
-#$ -l long
-
-sleep 120s;""")
-
-            # Create bash script to run test on each node of the server
-            with open(os.path.join(path, 'node_test', self.server, 'subctest.sh'), 'w') as f:
-                f.write("""#!/bin/bash
-                
-f8=working_nodes_8core.txt;
-f48=working_nodes_48core.txt;
-fwk=working_nodes_all.txt;
-ftmp=nodes.tmp;
-ftmp8=nodes8.tmp;
-ftmp48=nodes48.tmp;
-
-rm *.out $f8 $f48 $fwk $ftmp $ftmp8 $ftmp48;
-
-for n in $(seq 98);
-do
-  node=node$(printf "%02d" $n)
-  qsub -q *@$node.cluster -o $node.out -j y ctest.sh
-done;
-
-sleep 6s;
-qstat -u $(whoami) | grep "ctest.sh" > $ftmp;
-qdel `qstat -u $(whoami) | grep "ctest.sh" | cut -c1-7`;
-less $ftmp | cut -c77-78 > $fwk;
-sed -ri '/^\s*$/d' $fwk;
-
-seq -w 63 > $ftmp8
-cat $fwk $ftmp8 | sort | uniq -d > $f8;
-
-seq 64 98 > $ftmp48
-cat $fwk $ftmp48 | sort | uniq -d > $f48;
-
-sed -ri 's/.*/#$ -q *@node&.cluster/' $f8 $f48;
-
-rm *.out $ftmp $ftmp8 $ftmp48;""")
-
-            # Upload node test script and bash script to the server
-            ssh = SSH_Client(self.server)
-            local_path = os.path.join(path, 'node_test', self.server)
-            remote_path = os.path.join('runs', 'ARC_Projects', self.project, 'node_test')
-            ssh.send_command_to_server(command='mkdir -p {0}'.format(remote_path), remote_path=remote_path)
-            ssh.upload_file(remote_file_path=os.path.join(remote_path, 'ctest.sh'),
-                            local_file_path=os.path.join(local_path, 'ctest.sh'))
-            ssh.upload_file(remote_file_path=os.path.join(remote_path, 'subctest.sh'),
-                            local_file_path=os.path.join(local_path, 'subctest.sh'))
-
-            # Run test on server
-            ssh.send_command_to_server(command='bash subctest.sh', remote_path=remote_path)
-
-            # Retrieve node test result
-            time.sleep(30)
-            ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_8core.txt'),
-                              local_file_path=os.path.join(local_path, 'working_nodes_8core.txt'))
-            ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_48core.txt'),
-                              local_file_path=os.path.join(local_path, 'working_nodes_48core.txt'))
-        elif servers[server]['cluster_soft'].lower() == 'slurm':
-            pass  # TODO: implement node test for slurm servers
 
     def determine_run_time(self):
         """Determine the run time"""

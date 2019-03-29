@@ -22,12 +22,13 @@ import arc.rmgdb as rmgdb
 from arc import plotter
 from arc import parser
 from arc.job.job import Job
-from arc.arc_exceptions import SpeciesError, SchedulerError
+from arc.arc_exceptions import SpeciesError, SchedulerError, FunctionArgumentError
 from arc.job.ssh import SSH_Client
 from arc.species.species import ARCSpecies, TSGuess, determine_rotor_symmetry
 from arc.species.converter import get_xyz_string, molecules_from_xyz, check_isomorphism
 from arc.ts.atst import autotst
-from arc.settings import rotor_scan_resolution, inconsistency_ab, inconsistency_az, maximum_barrier
+from arc.settings import rotor_scan_resolution, inconsistency_ab, inconsistency_az, maximum_barrier, servers
+from arc.scripts import server_test_script
 
 ##################################################################
 
@@ -75,8 +76,10 @@ class Scheduler(object):
     `rmgdb`                 ``RMGDatabase``  The RMG database object
     `allow_nonisomorphic_2d` ``bool`` Whether to optimize species even if they do not have a 3D conformer that is
                                         isomorphic to the 2D graph representation
-    `memory`                 ``int``  The allocated job memory (1500 MB by default)
-    `check_server_nodes`     ``bool`` Whether to check nodes availability at start (default: False)
+    `memory`                ``int``   The allocated job memory (1500 MB by default)
+    `server_dict`           ``dict``  A dictionary of server information. Keys are server names, values are dictionaries
+                                        where keys including server-specific information such as available nodes
+                                        and node test scripts
     ======================= ========= ==================================================================================
 
     Dictionary structures:
@@ -104,15 +107,24 @@ class Scheduler(object):
                         'composite': <path to composite output file>,
              label_2: {...},
              }
+
+*   server_dict = {server_1: {available_nodes_list: [node01, node02, ...],
+                              node_test_script: "test script"},
+                              check_nodes: bool (True/False)
+                   server_2: {...},
+                   }
+
     # Note that rotor scans are located under Species.rotors_dict
     """
+
     def __init__(self, project, settings, species_list, composite_method, conformer_level, opt_level, freq_level,
                  sp_level, scan_level, ts_guess_level, orbitals_level, project_directory, rmgdatabase, fine=False,
                  scan_rotors=True, generate_conformers=True, initial_trsh=None, rxn_list=None, restart_dict=None,
                  max_job_time=120, allow_nonisomorphic_2d=False, memory=1500, testing=False, visualize_orbitals=True,
-                 check_server_nodes=False):
+                 server_dict=None):
         self.rmgdb = rmgdatabase
         self.restart_dict = restart_dict
+        self.server_dict = server_dict if server_dict is not None else dict()
         self.species_list = species_list
         self.rxn_list = rxn_list if rxn_list is not None else list()
         self.project = project
@@ -149,7 +161,6 @@ class Scheduler(object):
         self.unique_species_labels = list()
         self.initial_trsh = initial_trsh if initial_trsh is not None else dict()
         self.save_restart = False
-        self.check_server_nodes = check_server_nodes
 
         if len(self.rxn_list):
             rxn_info_path = self.make_reaction_labels_info_file()
@@ -526,6 +537,9 @@ class Scheduler(object):
         """
         try:
             job.determine_job_status()  # also downloads output file
+            assert (job.server is not None), "failed to determine job {0} server".format(job.job_name)
+            if job.job_status[0] not in ['running', 'pending'] and not self.server_dict[job.server][check_nodes]:
+                self.server_node_test(server=job.server)
         except IOError:
             logging.warn('Tried to determine status of job {0}, but it seems like the job never ran.'
                          ' Re-running job.'.format(job.job_name))
@@ -535,6 +549,7 @@ class Scheduler(object):
                          pivots=job.pivots, occ=job.occ, scan_trsh=job.scan_trsh, scan_res=job.scan_res)
             if job_name in self.running_jobs[label]:
                 self.running_jobs[label].pop(self.running_jobs[label].index(job_name))
+
         if job.job_status[0] not in ['running', 'pending'] and job.job_status[1] != 'running':
             if job_name in self.running_jobs[label]:
                 self.running_jobs[label].pop(self.running_jobs[label].index(job_name))
@@ -1392,11 +1407,10 @@ class Scheduler(object):
             xyz = self.species_dict[label].initial_xyz
         if 'Unknown reason' in job.job_status[1] and 'change_node' not in job.ess_trsh_methods:
             job.ess_trsh_methods.append('change_node')
-            job.troubleshoot_server()
+            # job.troubleshoot_server() # todo: tmp for testing, remove this later
             if job.job_name not in self.running_jobs[label]:
                 self.running_jobs[label].append(job.job_name)  # mark as a running job
         elif job.software == 'gaussian':
-            job.troubleshoot_server()
             if 'l103 internal coordinate error' in job.job_status[1]\
                     and 'cartesian' not in job.ess_trsh_methods and job_type == 'opt':
                 # try both cartesian and nosymm
@@ -1766,6 +1780,55 @@ class Scheduler(object):
                     f.write('Failed to converge')
                 f.write('\n\n\n')
 
+    def server_node_test(self, server='All'):
+        if server == 'All':
+            pass # todo: test for all servers
+        if servers[server]['cluster_soft'].lower() == 'slurm':
+            pass # todo: test for slurm servers
+        elif servers[server]['cluster_soft'].lower() == 'oge':
+            self.server_node_test_for_oge(server=server)
+        else:
+            raise FunctionArgumentError('server {0} is not defined'.format(server))
+
+    def server_node_test_for_oge(self, server=None):
+        if server is None:
+            raise FunctionArgumentError('Must specify a server to run test')
+        elif server.lower() == 'pharos':
+            # Create node_test folder in the project directory
+            server = server.lower()
+            logging.info('Diagnosing nodes on {server}.'.format(server=server))
+            path = self.project_directory
+            if not os.path.exists(os.path.join(path, 'node_test')):
+                os.mkdir(os.path.join(path, 'node_test'))
+            if not os.path.exists(os.path.join(path, 'node_test', sever)):
+                os.mkdir(os.path.join(path, 'node_test', server))
+                local_path = os.path.join(path, 'node_test', server)
+
+            # create and upload node test script and bash script to the server
+            with open(os.path.join(local_path, 'ctest.sh'), 'w') as f:
+                f.write(server_test_script[server]['core_test'])
+            with open(os.path.join(local_path, 'subctest.sh'), 'w') as f:
+                f.write(server_test_script[server]['core_test_submit'])
+
+            ssh = SSH_Client(self.server)
+            remote_path = os.path.join('runs', 'ARC_Projects', self.project, 'node_test')
+            ssh.send_command_to_server(command='mkdir -p {0}'.format(remote_path), remote_path=remote_path)
+            ssh.upload_file(remote_file_path=os.path.join(remote_path, 'ctest.sh'),
+                            local_file_path=os.path.join(local_path, 'ctest.sh'))
+            ssh.upload_file(remote_file_path=os.path.join(remote_path, 'subctest.sh'),
+                            local_file_path=os.path.join(local_path, 'subctest.sh'))
+
+            # Run test on server
+            ssh.send_command_to_server(command='bash subctest.sh', remote_path=remote_path)
+
+            # Retrieve node test result
+            time.sleep(30)
+            ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_8core.txt'),
+                              local_file_path=os.path.join(local_path, 'working_nodes_8core.txt'))
+            ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_48core.txt'),
+                              local_file_path=os.path.join(local_path, 'working_nodes_48core.txt'))
+        else:
+            pass #todo: test for other OGE servers
 
 def string_representer(dumper, data):
     """Add a custom string representer to use block literals for multiline strings"""
@@ -1779,3 +1842,4 @@ def unicode_representer(dumper, data):
     if len(data.splitlines()) > 1:
         return yaml.ScalarNode(tag='tag:yaml.org,2002:str', value=data, style='|')
     return yaml.ScalarNode(tag='tag:yaml.org,2002:str', value=data)
+
