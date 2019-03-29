@@ -1396,6 +1396,7 @@ class Scheduler(object):
             if job.job_name not in self.running_jobs[label]:
                 self.running_jobs[label].append(job.job_name)  # mark as a running job
         elif job.software == 'gaussian':
+            job.troubleshoot_server()
             if 'l103 internal coordinate error' in job.job_status[1]\
                     and 'cartesian' not in job.ess_trsh_methods and job_type == 'opt':
                 # try both cartesian and nosymm
