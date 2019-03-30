@@ -28,7 +28,7 @@ from arc.species.species import ARCSpecies, TSGuess, determine_rotor_symmetry
 from arc.species.converter import get_xyz_string, molecules_from_xyz, check_isomorphism
 from arc.ts.atst import autotst
 from arc.settings import rotor_scan_resolution, inconsistency_ab, inconsistency_az, maximum_barrier, servers
-from arc.scripts import server_test_script
+from arc.job.scripts import server_test_script
 
 ##################################################################
 
@@ -109,7 +109,6 @@ class Scheduler(object):
              }
 
 *   server_dict = {server_1: {available_nodes_list: [node01, node02, ...],
-                              node_test_script: "test script"},
                               check_nodes: bool (True/False)
                    server_2: {...},
                    }
@@ -538,11 +537,11 @@ class Scheduler(object):
         try:
             job.determine_job_status()  # also downloads output file
             assert (job.server is not None), "failed to determine job {0} server".format(job.job_name)
-            if job.job_status[0] not in ['running', 'pending'] and not self.server_dict[job.server][check_nodes]:
+            if job.job_status[0] not in ['running', 'pending']:
                 self.server_node_test(server=job.server)
         except IOError:
-            logging.warn('Tried to determine status of job {0}, but it seems like the job never ran.'
-                         ' Re-running job.'.format(job.job_name))
+            logging.warning('Tried to determine status of job {0}, but it seems like the job never ran.'
+                            ' Re-running job.'.format(job.job_name))
             self.run_job(label=label, xyz=job.xyz, level_of_theory=job.level_of_theory, job_type=job.job_type,
                          fine=job.fine, software=job.software, shift=job.shift, trsh=job.trsh, memory=job.memory,
                          conformer=job.conformer, ess_trsh_methods=job.ess_trsh_methods, scan=job.scan,
@@ -1800,7 +1799,7 @@ class Scheduler(object):
             path = self.project_directory
             if not os.path.exists(os.path.join(path, 'node_test')):
                 os.mkdir(os.path.join(path, 'node_test'))
-            if not os.path.exists(os.path.join(path, 'node_test', sever)):
+            if not os.path.exists(os.path.join(path, 'node_test', server)):
                 os.mkdir(os.path.join(path, 'node_test', server))
                 local_path = os.path.join(path, 'node_test', server)
 
@@ -1810,7 +1809,7 @@ class Scheduler(object):
             with open(os.path.join(local_path, 'subctest.sh'), 'w') as f:
                 f.write(server_test_script[server]['core_test_submit'])
 
-            ssh = SSH_Client(self.server)
+            ssh = SSH_Client(server)
             remote_path = os.path.join('runs', 'ARC_Projects', self.project, 'node_test')
             ssh.send_command_to_server(command='mkdir -p {0}'.format(remote_path), remote_path=remote_path)
             ssh.upload_file(remote_file_path=os.path.join(remote_path, 'ctest.sh'),
@@ -1827,6 +1826,19 @@ class Scheduler(object):
                               local_file_path=os.path.join(local_path, 'working_nodes_8core.txt'))
             ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_48core.txt'),
                               local_file_path=os.path.join(local_path, 'working_nodes_48core.txt'))
+            if server not in self.server_dict:
+                self.server_dict[server] = dict()
+
+            with open(os.path.join(local_path, 'working_nodes_8core.txt'), 'r') as f:
+                work_harpertown_node_list = f.readlines()
+                work_harpertown_node_list = [node.strip() for node in work_harpertown_node_list]
+            self.server_dict[server]['available_8core_nodes_list'] = work_harpertown_node_list
+
+            with open(os.path.join(local_path, 'working_nodes_48core.txt'), 'r') as f:
+                work_magnycours_node_list = f.readlines()
+                work_magnycours_node_list = [node.strip() for node in work_magnycours_node_list]
+            self.server_dict[server]['available_48core_nodes_list'] = work_harpertown_node_list
+            print(self.server_dict)
         else:
             pass #todo: test for other OGE servers
 
