@@ -36,12 +36,11 @@ servers = {
         'key': 'path_to_rsa_key',
         'precedence': 'molpro',
     },
-    'pharos': {
-        'cluster_soft': 'OGE',  # Oracle Grid Engine (Sun Grin Engine)
-        'address': 'pharos.mit.edu',
-        'un': 'oscarwu',
-        'key': '/home/oscarwu/.ssh/id_rsa',
-        'cpus': 48,  # optional (default: 8)
+    'server2': {
+        'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
+        'address': 'server2.host.edu',
+        'un': '<username>',
+        'key': 'path_to_rsa_key',
     }
 }
 
