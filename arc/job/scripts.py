@@ -15,6 +15,11 @@ server_test_script['pharos'] = dict()
 
 server_test_script['pharos']['core_test_submit'] = """#!/bin/bash
 
+export PATH=/opt/sge/bin/lx24-amd64:$PATH;
+export PATH=/usr/bin/mh:$PATH;
+source ~/.bashrc;
+export SGE_ROOT=/opt/sge;
+
 f8=working_nodes_8core.txt;
 f48=working_nodes_48core.txt;
 fwk=working_nodes_all.txt;
@@ -28,9 +33,11 @@ for n in $(seq 98);
 do
   node=node$(printf "%02d" $n)
   qsub -q *@$node.cluster -o $node.out -j y ctest.sh
+  echo $(whoami) > test.txt
 done;
 
 sleep 6s;
+
 qstat -u $(whoami) | grep "ctest.sh" > $ftmp;
 qdel `qstat -u $(whoami) | grep "ctest.sh" | cut -c1-7`;
 less $ftmp | cut -c77-78 > $fwk;
