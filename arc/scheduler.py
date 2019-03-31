@@ -527,8 +527,8 @@ class Scheduler(object):
         try:
             job.determine_job_status()  # also downloads output file
         except IOError:
-            logging.warn('Tried to determine status of job {0}, but it seems like the job never ran.'
-                         ' Re-running job.'.format(job.job_name))
+            logging.warning('Tried to determine status of job {0}, but it seems like the job never ran.'
+                            ' Re-running job.'.format(job.job_name))
             self.run_job(label=label, xyz=job.xyz, level_of_theory=job.level_of_theory, job_type=job.job_type,
                          fine=job.fine, software=job.software, shift=job.shift, trsh=job.trsh, memory=job.memory,
                          conformer=job.conformer, ess_trsh_methods=job.ess_trsh_methods, scan=job.scan,
@@ -726,7 +726,7 @@ class Scheduler(object):
             self.species_dict[label].conformer_energies[i] = log.software_log.loadEnergy()  # in J/mol
             logging.debug('energy for {0} is {1}'.format(i, self.species_dict[label].conformer_energies[i]))
         else:
-            logging.warn('Conformer {i} for {label} did not converge!'.format(i=i, label=label))
+            logging.warning('Conformer {i} for {label} did not converge!'.format(i=i, label=label))
 
     def determine_most_stable_conformer(self, label):
         """
@@ -800,10 +800,11 @@ class Scheduler(object):
                             break
                         else:
                             if i == 0:
-                                logging.warn('Most stable conformer for species {0} with structure {1} was found to '
-                                             'be NON-isomorphic with the 2D graph representation {2}. Searching for a '
-                                             'different conformer that is isomorphic...'.format(label, b_mol.toSMILES(),
-                                                                            self.species_dict[label].mol.toSMILES()))
+                                logging.warning('Most stable conformer for species {0} with structure {1} was found to '
+                                                'be NON-isomorphic with the 2D graph representation {2}. Searching for'
+                                                'a different conformer that is isomorphic...'
+                                                .format(label, b_mol.toSMILES(),
+                                                        self.species_dict[label].mol.toSMILES()))
                 else:
                     smiles_list = list()
                     for xyz in xyzs:
@@ -824,9 +825,9 @@ class Scheduler(object):
                         self.output[label]['status'] += 'Error: No conformer was found to be isomorphic with the 2D' \
                                                         ' graph representation! '
             else:
-                logging.warn('Could not run isomorphism check for species {0} due to missing 2D graph '
-                             'representation. Using the most stable conformer for further geometry'
-                             ' optimization.'.format(label))
+                logging.warning('Could not run isomorphism check for species {0} due to missing 2D graph '
+                                'representation. Using the most stable conformer for further geometry'
+                                ' optimization.'.format(label))
                 conformer_xyz = xyzs[0]
             self.species_dict[label].initial_xyz = conformer_xyz
 
@@ -1143,7 +1144,7 @@ class Scheduler(object):
                                     warn_message = 'Rotor scan of {label} between pivots {pivots} has a barrier larger' \
                                                    ' than {maximum_barrier} kJ/mol. Invalidating rotor.'.format(
                                                     label=label, pivots=job.pivots, maximum_barrier=maximum_barrier)
-                                    logging.warn(warn_message)
+                                    logging.warning(warn_message)
                                     message += warn_message + '; '
                                     invalidate = True
                                     invalidation_reason = 'scan has a barrier larger than {0}' \
@@ -1384,7 +1385,7 @@ class Scheduler(object):
         Troubleshoot issues related to the electronic structure software, such as conversion
         """
         logging.info('\n')
-        logging.warn('Troubleshooting {label} job {job_name} which failed with status "{stat}" in {soft}.'.format(
+        logging.warning('Troubleshooting {label} job {job_name} which failed with status "{stat}" in {soft}.'.format(
             job_name=job.job_name, label=label, stat=job.job_status[1], soft=job.software))
         if conformer != -1:
             xyz = self.species_dict[label].conformers[conformer]
@@ -1396,112 +1397,111 @@ class Scheduler(object):
             if job.job_name not in self.running_jobs[label]:
                 self.running_jobs[label].append(job.job_name)  # mark as a running job
         elif job.software == 'gaussian':
-            job.troubleshoot_server()
             if job.job_name not in self.running_jobs[label]:
                 self.running_jobs[label].append(job.job_name)
-            # if 'l103 internal coordinate error' in job.job_status[1]\
-            #         and 'cartesian' not in job.ess_trsh_methods and job_type == 'opt':
-            #     # try both cartesian and nosymm
-            #     logging.info('Troubleshooting {type} job in {software} using opt=cartesian with nosyym'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('cartesian')
-            #     trsh = 'opt=(cartesian,nosymm)'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'scf=(qc,nosymm)' not in job.ess_trsh_methods:
-            #     # try both qc and nosymm
-            #     logging.info('Troubleshooting {type} job in {software} using scf=(qc,nosymm)'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('scf=(qc,nosymm)')
-            #     trsh = 'scf=(qc,nosymm)'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'scf=(NDump=30)' not in job.ess_trsh_methods:
-            #     # Allows dynamic dumping for up to N SCF iterations (slower conversion)
-            #     logging.info('Troubleshooting {type} job in {software} using scf=(NDump=30)'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('scf=(NDump=30)')
-            #     trsh = 'scf=(NDump=30)'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'scf=NoDIIS' not in job.ess_trsh_methods:
-            #     # Switching off Pulay's Direct Inversion
-            #     logging.info('Troubleshooting {type} job in {software} using scf=NoDIIS'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('scf=NoDIIS')
-            #     trsh = 'scf=NoDIIS'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'int=(Acc2E=14)' not in job.ess_trsh_methods:  # does not work in g03
-            #     # Change integral accuracy (skip everything up to 1E-14 instead of 1E-12)
-            #     logging.info('Troubleshooting {type} job in {software} using int=(Acc2E=14)'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('int=(Acc2E=14)')
-            #     trsh = 'int=(Acc2E=14)'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'cbs-qb3' not in job.ess_trsh_methods and self.composite_method != 'cbs-qb3':
-            #     # try running CBS-QB3, which is relatively robust
-            #     logging.info('Troubleshooting {type} job in {software} using CBS-QB3'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('cbs-qb3')
-            #     level_of_theory = 'cbs-qb3'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type='composite',
-            #                  fine=job.fine, ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
-            # elif 'scf=nosymm' not in job.ess_trsh_methods:
-            #     # calls a quadratically convergent SCF procedure
-            #     logging.info('Troubleshooting {type} job in {software} using scf=nosymm'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('scf=nosymm')
-            #     trsh = 'scf=nosymm'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'memory' not in job.ess_trsh_methods:
-            #     # Increase memory allocation
-            #     memory = 3000
-            #     logging.info('Troubleshooting {type} job in {software} using memory: {mem} MB'.format(
-            #         type=job_type, software=job.software, mem=memory))
-            #     job.ess_trsh_methods.append('memory')
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, memory=memory, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif self.composite_method != 'cbs-qb3' and 'scf=(qc,nosymm) & CBS-QB3' not in job.ess_trsh_methods:
-            #     # try both qc and nosymm with CBS-QB3
-            #     logging.info('Troubleshooting {type} job in {software} using scf=(qc,nosymm) with CBS-QB3'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('scf=(qc,nosymm) & CBS-QB3')
-            #     level_of_theory = 'cbs-qb3'
-            #     trsh = 'scf=(qc,nosymm)'
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
-            #                  job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
-            #                  conformer=conformer)
-            # elif 'qchem' not in job.ess_trsh_methods and not job.job_type == 'composite':
-            #     # Try QChem
-            #     logging.info('Troubleshooting {type} job using qchem instead of {software}'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('qchem')
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type=job_type, fine=job.fine,
-            #                  software='qchem', ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
-            # elif 'molpro' not in job.ess_trsh_methods and not job.job_type == 'composite':
-            #     # Try molpro
-            #     logging.info('Troubleshooting {type} job using molpro instead of {software}'.format(
-            #         type=job_type, software=job.software))
-            #     job.ess_trsh_methods.append('molpro')
-            #     self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type=job_type, fine=job.fine,
-            #                  software='molpro', ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
-            # else:
-            #     logging.error('Could not troubleshoot geometry optimization for {label}! Tried'
-            #                   ' troubleshooting with the following methods: {methods}'.format(
-            #                    label=label, methods=job.ess_trsh_methods))
-            #     self.output[label]['status'] += '; Error: Could not troubleshoot geometry optimization for {label}! ' \
-            #                                     ' Tried troubleshooting with the following methods: {methods}'.format(
-            #                                      label=label, methods=job.ess_trsh_methods)
+            if 'l103 internal coordinate error' in job.job_status[1]\
+                    and 'cartesian' not in job.ess_trsh_methods and job_type == 'opt':
+                # try both cartesian and nosymm
+                logging.info('Troubleshooting {type} job in {software} using opt=cartesian with nosyym'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('cartesian')
+                trsh = 'opt=(cartesian,nosymm)'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'scf=(qc,nosymm)' not in job.ess_trsh_methods:
+                # try both qc and nosymm
+                logging.info('Troubleshooting {type} job in {software} using scf=(qc,nosymm)'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('scf=(qc,nosymm)')
+                trsh = 'scf=(qc,nosymm)'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'scf=(NDump=30)' not in job.ess_trsh_methods:
+                # Allows dynamic dumping for up to N SCF iterations (slower conversion)
+                logging.info('Troubleshooting {type} job in {software} using scf=(NDump=30)'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('scf=(NDump=30)')
+                trsh = 'scf=(NDump=30)'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'scf=NoDIIS' not in job.ess_trsh_methods:
+                # Switching off Pulay's Direct Inversion
+                logging.info('Troubleshooting {type} job in {software} using scf=NoDIIS'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('scf=NoDIIS')
+                trsh = 'scf=NoDIIS'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'int=(Acc2E=14)' not in job.ess_trsh_methods:  # does not work in g03
+                # Change integral accuracy (skip everything up to 1E-14 instead of 1E-12)
+                logging.info('Troubleshooting {type} job in {software} using int=(Acc2E=14)'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('int=(Acc2E=14)')
+                trsh = 'int=(Acc2E=14)'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'cbs-qb3' not in job.ess_trsh_methods and self.composite_method != 'cbs-qb3':
+                # try running CBS-QB3, which is relatively robust
+                logging.info('Troubleshooting {type} job in {software} using CBS-QB3'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('cbs-qb3')
+                level_of_theory = 'cbs-qb3'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type='composite',
+                             fine=job.fine, ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
+            elif 'scf=nosymm' not in job.ess_trsh_methods:
+                # calls a quadratically convergent SCF procedure
+                logging.info('Troubleshooting {type} job in {software} using scf=nosymm'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('scf=nosymm')
+                trsh = 'scf=nosymm'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'memory' not in job.ess_trsh_methods:
+                # Increase memory allocation
+                memory = 3000
+                logging.info('Troubleshooting {type} job in {software} using memory: {mem} MB'.format(
+                    type=job_type, software=job.software, mem=memory))
+                job.ess_trsh_methods.append('memory')
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, memory=memory, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif self.composite_method != 'cbs-qb3' and 'scf=(qc,nosymm) & CBS-QB3' not in job.ess_trsh_methods:
+                # try both qc and nosymm with CBS-QB3
+                logging.info('Troubleshooting {type} job in {software} using scf=(qc,nosymm) with CBS-QB3'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('scf=(qc,nosymm) & CBS-QB3')
+                level_of_theory = 'cbs-qb3'
+                trsh = 'scf=(qc,nosymm)'
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, software=job.software,
+                             job_type=job_type, fine=job.fine, trsh=trsh, ess_trsh_methods=job.ess_trsh_methods,
+                             conformer=conformer)
+            elif 'qchem' not in job.ess_trsh_methods and not job.job_type == 'composite':
+                # Try QChem
+                logging.info('Troubleshooting {type} job using qchem instead of {software}'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('qchem')
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type=job_type, fine=job.fine,
+                             software='qchem', ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
+            elif 'molpro' not in job.ess_trsh_methods and not job.job_type == 'composite':
+                # Try molpro
+                logging.info('Troubleshooting {type} job using molpro instead of {software}'.format(
+                    type=job_type, software=job.software))
+                job.ess_trsh_methods.append('molpro')
+                self.run_job(label=label, xyz=xyz, level_of_theory=level_of_theory, job_type=job_type, fine=job.fine,
+                             software='molpro', ess_trsh_methods=job.ess_trsh_methods, conformer=conformer)
+            else:
+                logging.error('Could not troubleshoot geometry optimization for {label}! Tried'
+                              ' troubleshooting with the following methods: {methods}'.format(
+                               label=label, methods=job.ess_trsh_methods))
+                self.output[label]['status'] += '; Error: Could not troubleshoot geometry optimization for {label}! ' \
+                                                ' Tried troubleshooting with the following methods: {methods}'.format(
+                                                 label=label, methods=job.ess_trsh_methods)
         elif job.software == 'qchem':
             if 'max opt cycles reached' in job.job_status[1] and 'max_cycles' not in job.ess_trsh_methods:
                 # this is a common error, increase max cycles and continue running from last geometry
