@@ -810,10 +810,12 @@ $end
                 ssh = SSH_Client(self.server)
                 ssh.send_command_to_server(command=delete_command[servers[self.server]['cluster_soft']] +
                                            ' ' + str(self.job_id))
-
-                logging.info('Diagnosing nodes on {server}.'.format(server=self.server))
-                self.server_node_test()
-                self.server_test = 1
+                if self.server_test == 3:
+                    logging.error('Server error. No nodes available. Tested 3 times.')
+                if 'pharos_8core' not in self.available_nodes_dict and 'pharos_48core' not in self.available_nodes_dict:
+                    logging.info('Diagnosing nodes on {server}.'.format(server=self.server))
+                    self.server_node_test()
+                    self.server_test += 1
 
                 if self.server.lower() in ['pharos'] and servers[self.server]['cpus'] <= 8:
                     if not self.available_nodes_dict['pharos_8core']:
@@ -823,14 +825,12 @@ $end
                         return
                     else:
                         self.run()
-                        self.server_test = 0
                 elif self.server.lower() in ['pharos'] and servers[self.server]['cpus'] > 8:
                         if not self.available_nodes_dict['pharos_48core']:
                             logging.error('Could not find an available node on the server')
                             return
                         else:
                             self.run()
-                            self.server_test = 0
             elif servers[self.server]['cluster_soft'].lower() == 'slurm':
                 # TODO: change node on Slurm
                 # delete present server run
@@ -839,9 +839,6 @@ $end
                 ssh = SSH_Client(self.server)
                 ssh.send_command_to_server(command=delete_command[servers[self.server]['cluster_soft']] +
                                            ' ' + str(self.job_id))
-                # resubmit
-                self.run()
-                self.server_test = 0
 
     def server_node_test(self):
         """
