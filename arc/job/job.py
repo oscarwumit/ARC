@@ -73,8 +73,9 @@ class Job(object):
     `occ`              ``int``           The number of occupied orbitals (core + val) from a molpro CCSD sp calc
     `project_directory` ``str``          The path to the project directory
     `max_job_time`     ``int``           The maximal allowed job time on the server in hours
-    `available_nodes`  ``dict``          Dictionary of list of available nodes on severs.
+    `available_nodes_dict`  ``dict``     Dictionary of list of available nodes on severs.
                                          {server1: [list of working nodes], server2: [list of working nodes]}
+    `server_test`      ``bool``          Whether to run a server test, default = False
     ================ =================== ===============================================================================
 
     self.job_status:
@@ -86,7 +87,7 @@ class Job(object):
                  charge=0, conformer=-1, fine=False, shift='', software=None, is_ts=False, scan='', pivots=None,
                  memory=1500, comments='', trsh='', scan_trsh='', ess_trsh_methods=None, initial_trsh=None, job_num=None,
                  job_server_name=None, job_name=None, job_id=None, server=None, initial_time=None, occ=None,
-                 max_job_time=120, scan_res=None, available_nodes=None):
+                 max_job_time=120, scan_res=None, available_nodes_dict=None):
         self.project = project
         self.settings=settings
         self.initial_time = initial_time
@@ -107,7 +108,8 @@ class Job(object):
         self.scan_trsh = scan_trsh
         self.scan_res = scan_res if scan_res is not None else rotor_scan_resolution
         self.max_job_time = max_job_time
-        self.available_nodes = available_nodes
+        self.available_nodes_dict = available_nodes_dict if available_nodes_dict is not None else dict()
+        self.server_test = 0
         job_types = ['conformer', 'opt', 'freq', 'optfreq', 'sp', 'composite', 'scan', 'gsm', 'irc', 'ts_guess',
                      'orbitals']
         # the 'conformer' job type is identical to 'opt', but we differentiate them to be identifiable in Scheduler
@@ -368,9 +370,15 @@ class Job(object):
                 architecture = '\n#$ -l harpertown'
             else:
                 architecture = '\n#$ -l magnycours'
+        if not self.server_test:
+            node = ''
+        elif self.server_test and architecture == '\n#$ -l harpertown':
+            node = random.choice(self.available_nodes_dict['pharos_8core'])
+        elif self.server_test and architecture == '\n#$ -l magnycours':
+            node = random.choice(self.available_nodes_dict['pharos_48core'])
         self.submit = submit_scripts[servers[self.server]['cluster_soft']][self.software.lower()].format(
             name=self.job_server_name, un=un, t_max=t_max, mem_cpu=min(int(self.memory * 150), 16000), cpus=cpus,
-            architecture=architecture)
+            architecture=architecture, node=node)
         # Memory convertion: multiply MW value by 1200 to conservatively get it in MB, then divide by 8 to get per cup
         if not os.path.exists(self.local_path):
             os.makedirs(self.local_path)
@@ -805,53 +813,24 @@ $end
 
                 logging.info('Diagnosing nodes on {server}.'.format(server=self.server))
                 self.server_node_test()
+                self.server_test = 1
 
                 if self.server.lower() in ['pharos'] and servers[self.server]['cpus'] <= 8:
-                    with open(os.path.join(path, 'node_test', self.server, 'working_nodes_8core.txt'), 'r') as f:
-                        work_harpertown_node_list = f.readlines()
-                        work_harpertown_node_list = [node.strip() for node in work_harpertown_node_list]
-                    if not work_harpertown_node_list:
+                    if not self.available_nodes_dict['pharos_8core']:
                         logging.error('Could not find an available node on the server')
-                        # TODO: continue troubleshooting; try submit to other servers with the same ESS
+                        # TODO: continue troubleshoot; try submit to other servers with the same ESS
                         #  if all else fails, put job to sleep for x min and try again searching for a node
                         return
                     else:
-                        content = ssh.read_remote_file(remote_path=self.remote_path,
-                                                       filename=submit_filename[servers[self.server]['cluster_soft']])
-                        for i, line in enumerate(content):
-                            if '#$ -l h=node' in line:
-                                content[i] = random.choice(work_harpertown_node_list) + '\n'
-                                break
-                        else:
-                            content.insert(7, random.choice(work_harpertown_node_list) + '\n')
-                        content = ''.join(content)  # convert list into a single string, not to upset paramico
+                        self.run()
+                        self.server_test = 0
                 elif self.server.lower() in ['pharos'] and servers[self.server]['cpus'] > 8:
-                    with open(os.path.join(path, 'node_test', self.server, 'working_nodes_48core.txt'), 'r') as f:
-                        work_magnycours_node_list = f.readlines()
-                        work_magnycours_node_list = [node.strip() for node in work_magnycours_node_list]
-                        if not work_magnycours_node_list:
+                        if not self.available_nodes_dict['pharos_48core']:
                             logging.error('Could not find an available node on the server')
-                            # TODO: continue troubleshooting; try submit to other servers with the same ESS
-                            #  if all else fails, put job to sleep for x min and try again searching for a node
                             return
                         else:
-                            content = ssh.read_remote_file(remote_path=self.remote_path,
-                                                           filename=submit_filename[
-                                                               servers[self.server]['cluster_soft']])
-                            for i, line in enumerate(content):
-                                if '#$ -l h=node' in line:
-                                    content[i] = random.choice(work_magnycours_node_list) + '\n'
-                                    break
-                            else:
-                                content.insert(7, random.choice(work_magnycours_node_list) + '\n')
-                            content = ''.join(content)  # convert list into a single string, not to upset paramico
-                else:
-                    pass  # todo: diagnose other OGE server
-
-                # resubmit job
-                ssh.upload_file(remote_file_path=os.path.join(self.remote_path,
-                                submit_filename[servers[self.server]['cluster_soft']]), file_string=content)
-                self.run()
+                            self.run()
+                            self.server_test = 0
             elif servers[self.server]['cluster_soft'].lower() == 'slurm':
                 # TODO: change node on Slurm
                 # delete present server run
@@ -862,12 +841,13 @@ $end
                                            ' ' + str(self.job_id))
                 # resubmit
                 self.run()
+                self.server_test = 0
 
     def server_node_test(self):
         """
         Test the nodes on server.
         """
-        # Test for OGE servers
+        # Test for OGE servers (pharos for now)
         if servers[self.server]['cluster_soft'].lower() == 'oge':
 
             # Create node_test folder in the project directory
@@ -904,7 +884,17 @@ $end
                               local_file_path=os.path.join(local_path, 'working_nodes_8core.txt'))
             ssh.download_file(remote_file_path=os.path.join(remote_path, 'working_nodes_48core.txt'),
                               local_file_path=os.path.join(local_path, 'working_nodes_48core.txt'))
-        elif servers[server]['cluster_soft'].lower() == 'slurm':
+
+            with open(os.path.join(path, 'node_test', self.server, 'working_nodes_8core.txt'), 'r') as f:
+                work_harpertown_node_list = f.readlines()
+                work_harpertown_node_list = [node.strip() for node in work_harpertown_node_list]
+            self.available_nodes_dict['pharos_8core'] = work_harpertown_node_list
+
+            with open(os.path.join(path, 'node_test', self.server, 'working_nodes_48core.txt'), 'r') as f:
+                work_magnycours_node_list = f.readlines()
+                work_magnycours_node_list = [node.strip() for node in work_magnycours_node_list]
+            self.available_nodes_dict['pharos_48core'] = work_magnycours_node_list
+        elif servers[self.server]['cluster_soft'].lower() == 'slurm':
             pass  # TODO: implement node test for slurm servers
 
     def determine_run_time(self):

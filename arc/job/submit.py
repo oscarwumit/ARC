@@ -173,6 +173,7 @@ rm -rf $sdir
 #$ -cwd
 #$ -o out.txt
 #$ -e err.txt
+{node}
 
 echo "Running on node:"
 hostname
@@ -199,6 +200,7 @@ rm -r /scratch/{un}/{name}
 #$ -cwd
 #$ -o out.txt
 #$ -e err.txt
+{node}
 
 echo "Running on node:"
 hostname
@@ -225,6 +227,7 @@ rm -r /scratch/{un}/{name}
 #$ -cwd
 #$ -o out.txt
 #$ -e err.txt
+{node}
 
 echo "Running on node:"
 hostname
@@ -252,6 +255,7 @@ rm -r /scratch/{un}/{name}
 #$ -cwd
 #$ -o out.txt
 #$ -e err.txt
+{node}
 
 export PATH=/opt/molpro2012/molprop_2012_1_Linux_x86_64_i8/bin:$PATH
 
