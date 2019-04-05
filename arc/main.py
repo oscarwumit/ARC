@@ -785,7 +785,7 @@ class ARC(object):
             elif not model_chemistry and sp_level in ['cbs-qb3', 'cbs-qb3-paraskevas', 'ccsd(t)-f12/cc-pvdz-f12',
                                                       'ccsd(t)-f12/cc-pvtz-f12', 'ccsd(t)-f12/cc-pvqz-f12',
                                                       'b3lyp/cbsb7', 'b3lyp/6-311g(2d,d,p)', 'b3lyp/6-311+g(3df,2p)',
-                                                      'b3lyp/6-31g**']:
+                                                      'b3lyp/6-31g**', 'wb97xd/6-311+g(d,p)']:
                 model_chemistry = sp_level
             elif self.use_bac:
                 logging.info('\n\n')
