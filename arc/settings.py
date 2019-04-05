@@ -29,18 +29,26 @@ import string
 #     }
 # }
 servers = {
-    'server1': {
+    'pharos': {
         'cluster_soft': 'OGE',  # Oracle Grid Engine
-        'address': 'server1.host.edu',
-        'un': '<username>',
-        'key': 'path_to_rsa_key',
+        'address': 'pharos.mit.edu',
+        'un': 'oscarwu',
+        'key': '/home/oscarwu/.ssh/id_rsa',
+        'cpus': 48,
     },
-    'server2': {
+    'c3ddb': {
         'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
-        'address': 'server2.host.edu',
-        'un': '<username>',
-        'key': 'path_to_rsa_key',
-        'cpus': 48,  # optional (default: 8)
+        'address': 'c3ddb01.mit.edu',
+        'un': 'oscarwu',
+        'key': '/home/oscarwu/.ssh/id_rsa',
+        'cpus': 8,  # optional (default: 8)
+    },
+    'rmg': {
+        'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
+        'address': 'rmg.mit.edu',
+        'un': 'oscarwu',
+        'key': '/home/oscarwu/.ssh/id_rsa',
+        'cpus': 8,
     }
 }
 
@@ -48,9 +56,9 @@ servers = {
 # An ordered list of servers indicates priority
 # Keeping this dictionary empty will cause ARC to scan for software on the servers defined above
 global_ess_settings = {
-    'gaussian': ['server1', 'server2'],
-    'molpro': 'server2',
-    'qchem': 'server1',
+    'gaussian': ['pharos', 'c3ddb'],
+    'molpro': 'c3ddb',
+    'qchem': 'pharos',
 }
 
 # List here (complete or partial) phrases of methods or basis sets you'd like to associate to specific ESS
