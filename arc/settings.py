@@ -49,6 +49,13 @@ servers = {
         'un': 'oscarwu',
         'key': '/home/oscarwu/.ssh/id_rsa',
         'cpus': 8,
+    },
+    'engaging': {
+        'cluster_soft': 'Slurm',  # Simple Linux Utility for Resource Management
+        'address': 'eofe4.mit.edu',
+        'un': 'oscarwu',
+        'key': '/home/oscarwu/.ssh/id_rsa',
+        'cpus': 8,  # optional (default: 8)
     }
 }
 
