@@ -1050,10 +1050,13 @@ class Scheduler(object):
             # This is a CCSD job ran before MRCI. Spawn MRCI
             self.run_sp_job(label)
         elif job.job_status[1] == 'done':
+            logging.info('1************************************')
             self.output[label]['status'] += 'sp converged; '
             self.output[label]['sp'] = os.path.join(job.local_path, 'output.out')
+            logging.info('2******************{0}'.format(self.output[label]['sp']))
             self.species_dict[label].t1 = parser.parse_t1(self.output[label]['sp'])
             self.species_dict[label].e0 = parser.parse_e0(self.output[label]['sp'])
+            logging.info('3*****************{0}'.format(self.species_dict[label].e0))
             if self.species_dict[label].t1 is not None:
                 txt = ''
                 if self.species_dict[label].t1 > 0.02:

@@ -62,14 +62,18 @@ def parse_e0(path):
     """
     Parse the zero K energy, E0, from an sp job
     """
+    logging.info('parse_e0 is being called, loading from {0}'.format(path))
     if not os.path.isfile(path):
         raise InputError('Could not find file {0}'.format(path))
     log = Log(path='')
     log.determine_qm_software(fullpath=path)
+    logging.info('DEBUG: look at here {0}'.format(log))
     try:
-        e0 = log.loadEnergy(frequencyScaleFactor=1.) * 0.001  # convert to kJ/mol
+        e0 = log.software_log.loadEnergy(frequencyScaleFactor=1.) * 0.001  # convert to kJ/mol
+        logging.info('DEBUG: try successful {0}'.format(e0))
     except Exception:
         e0 = None
+        logging.warning('Could not read E0 from {0}'.format(path))
     return e0
 
 
