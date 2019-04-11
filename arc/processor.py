@@ -47,10 +47,12 @@ class Processor(object):
     `t_min`           ``tuple``  The minimum temperature for kinetics computations, e.g., (500, str('K'))
     `t_max`           ``tuple``  The maximum temperature for kinetics computations, e.g., (3000, str('K'))
     `t_count`         ``int``    The number of temperature points between t_min and t_max for kinetics computations
+    `kinetics`        ``bool``   Whether or not the job is a kinetics only job. If True, ARC will inform Arkane that
+                                 no bond correction nor atom correction will be applied to the energy from QM files
     ================ =========== ===============================================================================
     """
     def __init__(self, project, project_directory, species_dict, rxn_list, output, use_bac, model_chemistry,
-                 lib_long_desc, rmgdatabase, t_min=None, t_max=None, t_count=None):
+                 lib_long_desc, rmgdatabase, t_min=None, t_max=None, t_count=None, kinetics=False):
         self.rmgdb = rmgdatabase
         self.project = project
         self.project_directory = project_directory
@@ -78,6 +80,7 @@ class Processor(object):
         self.t_min = (t_min[0], str(t_min[1]))
         self.t_max = (t_max[0], str(t_max[1]))
         self.t_count = t_count if t_count is not None else 50
+        self.kinetics = kinetics
 
     def _generate_arkane_species_file(self, species):
         """
@@ -311,26 +314,27 @@ class Processor(object):
                         f.write(' SMILES: {0}'.format(spc.mol.toSMILES()))
                     f.write('\n')
 
-    def _run_statmech(self, arkane_spc, arkane_file, output_file_path=None, use_bac=False, kinetics=False, plot=False):
+    def _run_statmech(self, arkane_spc, arkane_file, output_file_path=None, use_bac=False, plot=False):
         """
         A helper function for running an Arkane statmech job
         `arkane_spc` is the species() function from Arkane's input.py
         `arkane_file` is the Arkane species file (either .py or YAML form)
         `output_file_path` is a path to the Arkane output.py file
         `use_bac` is a bool flag indicating whether or not to use bond additivity corrections
-        `kinetics` is a bool flag indicating whether this specie sis part of a kinetics job, in which case..??
         `plot` is a bool flag indicating whether or not to plot a PDF of the calculated thermo properties
         """
+        kinetics = self.kinetics
         success = True
         stat_mech_job = StatMechJob(arkane_spc, arkane_file)
         stat_mech_job.applyBondEnergyCorrections = use_bac and not kinetics and self.model_chemistry
-        if not kinetics or kinetics and self.model_chemistry:
-            # currently we have to use a model chemistry for thermo
-            stat_mech_job.modelChemistry = self.model_chemistry
-        else:
-            # if this is a klinetics computation and we don't have a valid model chemistry, don't bother about it
-            stat_mech_job.applyAtomEnergyCorrections = False
+        stat_mech_job.modelChemistry = self.model_chemistry
         stat_mech_job.frequencyScaleFactor = assign_frequency_scale_factor(self.model_chemistry)
+        if self.model_chemistry is None:
+            logging.warning('model chemistry is None!')
+        if kinetics:
+            # if this is a kinetics only computation. Don't use atom correction, and force frequency scale to be 1
+            stat_mech_job.applyAtomEnergyCorrections = False
+            stat_mech_job.frequencyScaleFactor = 1
         try:
             stat_mech_job.execute(outputFile=output_file_path, plot=plot)
         except Exception:
