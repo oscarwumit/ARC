@@ -86,7 +86,7 @@ class ARC(object):
                  ts_guess_level='', fine=True, generate_conformers=True, scan_rotors=True, use_bac=True,
                  model_chemistry='', initial_trsh=None, t_min=None, t_max=None, t_count=None, run_orbitals=False,
                  verbose=logging.INFO, project_directory=None, max_job_time=120, allow_nonisomorphic_2d=False,
-                 job_memory=1500, ess_settings=None):
+                 job_memory=1500, ess_settings=None, kinetics=False):
 
         self.__version__ = '1.0.0'
         self.verbose = verbose
@@ -121,10 +121,13 @@ class ARC(object):
             self.scan_rotors = scan_rotors
             self.run_orbitals = run_orbitals
             self.use_bac = use_bac
-            if model_chemistry.lower() == 'fake':
-                self.model_chemistry = 'cbs-qb3'
-                logging.warning('user specified model_chemistry is fake, ARC is using cbs-qb3 model_chemistry to '
-                                'generate YAML files for species. Warning: Do NOT use YAML for thermo calculation')
+            self.kinetics = kinetics
+            if self.kinetics:
+                self.model_chemistry = 'BMK/cbsb7'
+                logging.warning('user specified kinetics calculation only, ARC is using BMK/cbsb7 model_chemistry to '
+                                'generate YAML files for species. Warning: Do NOT use YAML for thermo calculation'
+                                'Warning: ARC is NOT apply bond correction and atom correction')
+                self.use_bac = True
             else:
                 self.model_chemistry = model_chemistry
                 logging.info('Using {0} as model chemistry for energy corrections in Arkane'.format(self.model_chemistry))
@@ -603,7 +606,7 @@ class ARC(object):
                                    restart_dict=self.restart_dict, project_directory=self.project_directory,
                                    max_job_time=self.max_job_time, allow_nonisomorphic_2d=self.allow_nonisomorphic_2d,
                                    memory=self.memory, run_orbitals=self.run_orbitals,
-                                   orbitals_level=self.orbitals_level)
+                                   orbitals_level=self.orbitals_level, model_chemistry=self.model_chemistry)
 
         self.save_project_info_file()
 
@@ -611,7 +614,7 @@ class ARC(object):
                         species_dict=self.scheduler.species_dict, rxn_list=self.scheduler.rxn_list,
                         output=self.scheduler.output, use_bac=self.use_bac, model_chemistry=self.model_chemistry,
                         lib_long_desc=self.lib_long_desc, rmgdatabase=self.rmgdb, t_min=self.t_min, t_max=self.t_max,
-                        t_count=self.t_count)
+                        t_count=self.t_count, kinetics=self.kinetics)
         prc.process()
         self.summary()
         self.log_footer()

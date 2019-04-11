@@ -69,7 +69,9 @@ def parse_e0(path):
     log.determine_qm_software(fullpath=path)
     logging.info('DEBUG: look at here {0}'.format(log))
     try:
-        e0 = log.software_log.loadEnergy(frequencyScaleFactor=1.) * 0.001  # convert to kJ/mol
+        e0 = log.software_log.loadEnergy(frequencyScaleFactor=1.) * 0.001
+        # convert to kJ/mol, this energy does not include energy correction by Arkane; it is read from Gaussain sp
+        # output file directly
         logging.info('DEBUG: try successful {0}'.format(e0))
     except Exception:
         e0 = None
