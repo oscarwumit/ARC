@@ -606,7 +606,7 @@ class ARC(object):
                                    restart_dict=self.restart_dict, project_directory=self.project_directory,
                                    max_job_time=self.max_job_time, allow_nonisomorphic_2d=self.allow_nonisomorphic_2d,
                                    memory=self.memory, run_orbitals=self.run_orbitals,
-                                   orbitals_level=self.orbitals_level, model_chemistry=self.model_chemistry)
+                                   orbitals_level=self.orbitals_level)
 
         self.save_project_info_file()
 
