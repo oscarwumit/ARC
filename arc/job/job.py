@@ -409,11 +409,15 @@ class Job(object):
                             'multiplicity {2}'.format(self.species_name, self.number_of_radicals, self.multiplicity))
             if self.software == 'qchem':
                 restricted = 'True'  # In QChem this attribute is "unrestricted"
+            elif self.software == 'orca':
+                restricted = 'UHF'
             else:
                 restricted = 'u'
         else:
             if self.software == 'qchem':
                 restricted = 'False'  # In QChem this attribute is "unrestricted"
+            elif self.software == 'orca':
+                restricted = 'RHF'
             else:
                 restricted = ''
 
@@ -573,6 +577,8 @@ $end
                 else:
                     job_type_1 += ' guess=mix'
             elif self.software == 'qchem':
+                job_type_1 = 'sp'
+            elif self.software == 'orca':
                 job_type_1 = 'sp'
             elif self.software == 'molpro':
                 pass
