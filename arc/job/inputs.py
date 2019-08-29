@@ -8,7 +8,7 @@
 """
 parameters for input files:
 
-memory (in MB for gaussian, MW for molpro)
+memory (in MB for gaussian and orca, MW for molpro)
 method
 basis set
 slash is '', unless this is gaussian NOT running a composite method, in which case it is '/'
@@ -31,6 +31,10 @@ qchem:
     job_type_2: 'freq'.
     fine: '\n   GEOM_OPT_TOL_GRADIENT 15\n   GEOM_OPT_TOL_DISPLACEMENT 60\n   GEOM_OPT_TOL_ENERGY 5\n   XC_GRID SG-3'
     restricted: 'false' or 'true' for restricted / unrestricted
+
+orca:
+    job_type_1: 'sp'
+    restricted: 'RHF' for closed-shell SCF, 'UHF' for spin unrestricted SCF, 'ROHF' for open-shell spin restricted SCF
 """
 
 input_files = {
@@ -46,6 +50,18 @@ name
 {xyz}
 {scan}{scan_trsh}
 
+
+""",
+
+    'orca': """!{restricted} {method} {basis} {job_type_1} {fine} {trsh}
+%maxcore {memory}
+%pal
+nprocs {cpus}
+end
+
+*xyz {charge} {multiplicity}
+{xyz}
+*
 
 """,
 

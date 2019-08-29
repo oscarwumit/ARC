@@ -1204,6 +1204,11 @@ $end
                             raise JobError('Could not find the QChem software to run {0}/{1}'.format(
                                 self.method, self.basis_set))
                         self.software = 'qchem'
+                    elif 'dlpno' in self.method.lower():
+                        if 'orca' not in self.ess_settings.keys():
+                            raise JobError('Could not find the Orca software to run {0}/{1}'.format(
+                                self.method, self.basis_set))
+                        self.software = 'orca'
                     elif 'b97' in self.method or 'def2' in self.basis_set:
                         if 'gaussian' in self.ess_settings.keys():
                             self.software = 'gaussian'
